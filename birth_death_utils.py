@@ -90,7 +90,7 @@ def imbalance(graph):
 
 def imbalance_root(graph):
     '''
-    Returns the root imbalance proportion of a tree, defined as the ration between 
+    Returns the root imbalance proportion of a tree, defined as the ratio between 
     the total number of offspring on the root and the number of nodes in the largest
     root branch
     '''
