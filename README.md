@@ -13,6 +13,23 @@ This work is licensed under a
 [cc-by-sa-image]: https://licensebuttons.net/l/by-sa/4.0/88x31.png
 [cc-by-sa-shield]: https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg
 
+## Content
+
+This repository contains
+
+* _simulation_analysis.ipynb_, Jupyter notebook gathering all computations and results
+* _birth_death_utils.py_, python file containing utility functions needed for simulations and data analysis
+* _corpus_stemmata_, directory containing the stemmata anaylized. Each subdirectory correspond to a work, and contains a ```.dot``` file describing the topology of the stemma as an acyclic directed graph, as well as a ```metadata.txt``` file containing various informations on corresponding text and witnesses.
+*  _Old_French_witnesses.csv_, file containing the data used for frequency and datation analysis
+
+## Instalation
+
+The code in this repository requires Python 3.12 or later. All dependencies can be installed by runing the following command in the top directory of the repository
+
+```bash
+pip install requirements.txt
+```
+
 ## Acknowledgements
 
 <img src="https://erc.europa.eu/sites/default/files/2023-06/LOGO_ERC-FLAG_FP_NEGATIF.png"
