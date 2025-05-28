@@ -75,4 +75,4 @@ wcwidth==0.2.13
 webencodings==0.5.1
 widgetsnbextension==4.0.14
 yarg==0.1.9
-pydot==4.0.0
+pydot==1.4.2
