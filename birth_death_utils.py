@@ -268,8 +268,8 @@ def plot_heatmap(data, title, xticks, yticks, precision, cmap='viridis'):
     plt.colorbar(im)
     ax.set_title(title)
     plt.show()
-    
-def bootstraped(estimator):
+
+def bootstraped(sample_nb = 100):
     '''
     Decorator function returning the bootstraped mean and 10% confidence interval of an estimator
 
@@ -283,22 +283,23 @@ def bootstraped(estimator):
         (bootstrap mean, 5th centile of bootstrap distribution , 95th centile)
 
     '''
-    @functools.wraps(estimator)
-    def wrapper_bootstraped(dataset):
-        sample_size  = len(dataset)
-        sample_nb = 100
-        
-        list_estimator = []
-        
-        for k in range(sample_nb):
-            sample = np.random.choice(np.asarray(dataset, dtype ="object"), sample_size, replace = True)
-            list_estimator.append(estimator(sample))
+    def decorator(estimator):
+        @functools.wraps(estimator)
+        def wrapper_bootstraped(dataset):
+            sample_size  = len(dataset)
             
-        estimated_beta = np.mean(list_estimator)
-        lb = np.quantile(list_estimator, np.linspace(0,1,20))[0]
-        ub = np.quantile(list_estimator, np.linspace(0,1,20))[19]
-        return (estimated_beta, lb, ub)
-    return wrapper_bootstraped
+            list_estimator = []
+            
+            for k in range(sample_nb):
+                sample = np.random.choice(np.asarray(dataset, dtype ="object"), sample_size, replace = True)
+                list_estimator.append(estimator(sample))
+                
+            estimated_beta = np.mean(list_estimator)
+            lb = np.quantile(list_estimator, np.linspace(0,1,20))[0]
+            ub = np.quantile(list_estimator, np.linspace(0,1,20))[19]
+            return (estimated_beta, lb, ub)
+        return wrapper_bootstraped
+    return decorator
 
 
 def count_direct_filiation(g):
@@ -363,4 +364,4 @@ def imbalance_proportion(graph):
         for i in range(2):
             if nx.is_isomorphic(rooted_triplet(graph, q), Q3[i]):
                 h[i] += 1
-    return h[0]/len(triplets)
+    return h[1]/len(triplets)
