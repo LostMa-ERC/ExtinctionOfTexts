@@ -37,7 +37,6 @@ nbconvert==7.16.6
 nbformat==5.10.4
 nest-asyncio==1.6.0
 networkx==3.4.2
-numpy==2.2.6
 packaging==25.0
 pandas==2.2.3
 pandocfilters==1.5.1
@@ -55,11 +54,14 @@ Pygments==2.19.1
 pyparsing==3.2.3
 python-dateutil==2.9.0.post0
 pytz==2025.2
+pyyaml==6.0.3
 pyzmq==26.4.0
 referencing==0.36.2
 requests==2.32.3
 rpds-py==0.25.1
+sbi==0.25.0
 scipy==1.15.3
+seaborn==0.13.2
 six==1.17.0
 soupsieve==2.7
 stack-data==0.6.3
