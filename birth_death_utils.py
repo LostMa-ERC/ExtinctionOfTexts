@@ -108,45 +108,61 @@ def generate_tree(lda, mu, Nact, Ninact):
     currentID = 0
     G = nx.DiGraph()
     G.add_node(currentID)
-    living = {0:True}
+    living_nodes = set([0])
 
     birth_time = {0:0}
     death_time = {}
 
     pop = 1
-    prob_birth = lda
-    prob_death = mu
+    prob_birth = lda / (lda + mu)
+    prob_death =  mu / (lda + mu)
+    prob_event = lda + mu
 
-    for t in range(Nact):
-        for current_node in list(G.nodes()):
-            r = np.random.rand()
-            if r < prob_birth and living[current_node]:
-                currentID += 1
-                G.add_node(currentID)
-                G.add_edge(current_node, currentID)
-                living[currentID] = True
-                pop += 1
-                birth_time[currentID] = t
-            if prob_birth < r and r < (prob_birth + prob_death) and living[current_node]:
-                living[current_node] =  False
-                pop -= 1
-                death_time[current_node] = t
+    t = 0
+
+    while t < Tact:
         if pop == 0:
+            t = Tact
+            break
+        next_event = np.random.exponential(scale = 1. / (prob_event * pop))
+        if next_event > Tact:
+            t = Tact
             break
 
-    for t in range(Ninact):
-        for current_node in list(G.nodes()):
-            r = np.random.rand()
-            if r <  prob_death and living[current_node]:
-                living[current_node] =  False
-                pop -= 1
-                death_time[current_node] = t + Nact
-            if pop == 0:
-                break
-
+        t += next_event
+        r = np.random.rand()
+        current_node = np.random.choice(list(living_nodes))
+        if r < prob_birth:
+            currentID += 1
+            G.add_node(currentID)
+            G.add_edge(current_node, currentID)
+            living_nodes.add(currentID)
+            pop += 1
+            birth_time[currentID] = t
+        else:
+            living_nodes.remove(current_node)
+            pop -= 1
+            death_time[current_node] = t
+    
+    while t < Tact + Tinact:
+        if pop == 0:
+            t = Tact + Tinact
+            break
+        next_event = np.random.exponential(scale = 1. / (mu * pop))
+        if next_event > Tact + Tinact:
+            t = Tact + Tinact
+            break
+        t += next_event
+        current_node = np.random.choice(list(living_nodes))
+        living_nodes.remove(current_node)
+        pop -= 1
+        death_time[current_node] = t
+    
+    living = {n:(n in living_nodes) for n in G.nodes()}
     nx.set_node_attributes(G, living, 'state')
     nx.set_node_attributes(G, birth_time, 'birth_time')
     nx.set_node_attributes(G, death_time, 'death_time')
+
     return G
 
 def generate_stemma(GG):
