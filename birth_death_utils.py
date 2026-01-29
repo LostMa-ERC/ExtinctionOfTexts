@@ -381,3 +381,46 @@ def imbalance_proportion(graph):
             if nx.is_isomorphic(rooted_triplet(graph, q), Q3[i]):
                 h[i] += 1
     return h[1]/len(triplets)
+
+def load_from_OpenStemmata(file):
+    '''
+    returns a nx.DiGraph() tree from database .dot files
+    '''
+    G = nx.nx_pydot.read_dot(file)
+    
+    # remove uncertain paternity
+    edges_pt = nx.get_edge_attributes(G, 'style')
+    for edge, pt in edges_pt.items():
+        if pt =='dashed':
+            G.remove_edge(*edge)
+    
+    # remvove singletons and extra-stemmatic contaminations
+    singletons = []
+    for node in G.nodes():
+        if G.in_degree(node) == 0 and G.out_degree(node) == 0:
+            singletons.append(node)
+        if G.in_degree(node) == 0  and node !=  root(G):
+            singletons.append(node)
+    G.remove_nodes_from(singletons)
+    
+    # remove intra-stemmatic contaminations
+    for node in G.nodes():
+        in_neighbors = list(G.predecessors(node))
+        if G.in_degree(node) > 1:
+            contaminations = np.random.choice(in_neighbors, len(in_neighbors) -1, replace=False)
+            for parent in contaminations:
+                G.remove_edge(parent, node)
+    
+    # identify survivng witnesses
+    colors = nx.get_node_attributes(G, 'color')
+    living = {}
+    for node in G.nodes():
+        if node in colors.keys():
+            living[node] = False
+        else:
+            living[node] = True
+    nx.set_node_attributes(G, living, 'state')
+    
+    # remove non-branching unattested nodes
+    st = generate_stemma(G)
+    return st
