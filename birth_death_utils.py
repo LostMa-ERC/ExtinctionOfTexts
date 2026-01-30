@@ -120,13 +120,13 @@ def generate_tree(lda, mu, Nact, Ninact):
 
     t = 0
 
-    while t < Tact:
+    while t < Nact:
         if pop == 0:
-            t = Tact
+            t = Nact
             break
         next_event = np.random.exponential(scale = 1. / (prob_event * pop))
-        if next_event > Tact:
-            t = Tact
+        if next_event > Nact:
+            t = Nact
             break
 
         t += next_event
@@ -144,13 +144,13 @@ def generate_tree(lda, mu, Nact, Ninact):
             pop -= 1
             death_time[current_node] = t
     
-    while t < Tact + Tinact:
+    while t < Nact + Ninact:
         if pop == 0:
-            t = Tact + Tinact
+            t = Nact + Ninact
             break
         next_event = np.random.exponential(scale = 1. / (mu * pop))
-        if next_event > Tact + Tinact:
-            t = Tact + Tinact
+        if next_event > Nact + Ninact:
+            t = Nact + Ninact
             break
         t += next_event
         current_node = np.random.choice(list(living_nodes))
