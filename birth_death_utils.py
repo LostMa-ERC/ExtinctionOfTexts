@@ -5,7 +5,7 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from networkx.algorithms.traversal.depth_first_search import dfs_tree
-
+import random
 
 
 def leaves(graph):
@@ -159,6 +159,142 @@ def generate_tree(lda, mu, Nact, Ninact):
         death_time[current_node] = t
     
     living = {n:(n in living_nodes) for n in G.nodes()}
+    nx.set_node_attributes(G, living, 'state')
+    nx.set_node_attributes(G, birth_time, 'birth_time')
+    nx.set_node_attributes(G, death_time, 'death_time')
+
+    return G
+
+
+def generate_tree_bd_decay(lda0, mu, Tact, Tinact):
+    currentID = 0
+    G = nx.DiGraph()
+    G.add_node(currentID)
+    living_nodes = set([0])
+
+    birth_time = {0: 0}
+    death_time = {}
+
+    pop = 1
+
+    t = 0
+
+    while t < Tact:
+        lda1 = (2 * lda0 / Tact) * (Tact - t)
+        prob_event = lda1 + mu
+        prob_birth = lda1 / (lda1 + mu)
+        prob_death = mu / (lda1 + mu)
+
+        if pop == 0:
+            t = Tact
+            break
+        next_event = np.random.exponential(scale=1. / (prob_event * pop))
+        if next_event > Tact:
+            t = Tact
+            break
+
+        t += next_event
+        r = np.random.rand()
+        current_node = np.random.choice(list(living_nodes))
+        if r < prob_birth:
+            currentID += 1
+            G.add_node(currentID)
+            G.add_edge(current_node, currentID)
+            living_nodes.add(currentID)
+            pop += 1
+            birth_time[currentID] = t
+        else:
+            living_nodes.remove(current_node)
+            pop -= 1
+            death_time[current_node] = t
+
+    while t < Tact + Tinact:
+        if pop == 0:
+            t = Tact + Tinact
+            break
+        next_event = np.random.exponential(scale=1. / (mu * pop))
+        if next_event > Tact + Tinact:
+            t = Tact + Tinact
+            break
+        t += next_event
+        current_node = np.random.choice(list(living_nodes))
+        living_nodes.remove(current_node)
+        pop -= 1
+        death_time[current_node] = t
+
+    living = {n: (n in living_nodes) for n in G.nodes()}
+    nx.set_node_attributes(G, living, 'state')
+    nx.set_node_attributes(G, birth_time, 'birth_time')
+    nx.set_node_attributes(G, death_time, 'death_time')
+
+    return G
+
+
+def generate_tree_bd_decim(lda, mu, Tact, Tinact, Tcrisis):
+    currentID = 0
+    G = nx.DiGraph()
+    G.add_node(currentID)
+    living_nodes = set([0])
+
+    birth_time = {0: 0}
+    death_time = {}
+
+    pop = 1
+    prob_birth = lda / (lda + mu)
+    prob_death = mu / (lda + mu)
+    prob_event = lda + mu
+
+    t = 0
+    crisis_happened = False
+
+    while t < Tact:
+        if pop == 0:
+            t = Tact
+            break
+        next_event = np.random.exponential(scale=1. / (prob_event * pop))
+        if next_event > Tact:
+            t = Tact
+            break
+
+        t += next_event
+        r = np.random.rand()
+        current_node = np.random.choice(list(living_nodes))
+
+        if r < prob_birth:
+            currentID += 1
+            G.add_node(currentID)
+            G.add_edge(current_node, currentID)
+            living_nodes.add(currentID)
+            pop += 1
+            birth_time[currentID] = t
+        else:
+            living_nodes.remove(current_node)
+            pop -= 1
+            death_time[current_node] = t
+
+        if t > Tcrisis and not crisis_happened:
+            decimated_nodes = random.sample(list(living_nodes), int(0.5 * pop))
+            for n in decimated_nodes:
+                living_nodes.remove(int(n))
+                death_time[n] = t
+                pop -= 1
+            crisis_happened = True
+
+    while t < Tact + Tinact:
+        if pop == 0:
+            t = Tact + Tinact
+            break
+        next_event = np.random.exponential(scale=1. / (mu * pop))
+        if next_event > Tact + Tinact:
+            t = Tact + Tinact
+            break
+        t += next_event
+        current_node = np.random.choice(list(living_nodes))
+        living_nodes.remove(current_node)
+        pop -= 1
+        death_time[current_node] = t
+
+    living = {n: (n in living_nodes) for n in G.nodes()}
     nx.set_node_attributes(G, living, 'state')
     nx.set_node_attributes(G, birth_time, 'birth_time')
     nx.set_node_attributes(G, death_time, 'death_time')
