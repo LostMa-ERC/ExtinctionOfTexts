@@ -351,7 +351,7 @@ fig, axes = pairplot(
         [decimation_min_prior, decimation_max_prior]
     ],
     figsize=(10, 10),  # Larger figsize for better readability
-    labels=[r"$\lambda$", r"$\mu$", r"decay", r"decimation"]
+    labels=[r"$\lambda$", r"$\mu$", r"$r_{\text{decay}}$", r"$r_{\text{decim}}$"]
 )
 
 # Adjust the DPI and save the figure
