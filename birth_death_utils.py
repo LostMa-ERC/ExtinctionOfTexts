@@ -125,7 +125,7 @@ def generate_tree_unified(lda0, mu, decay, decim, Tact, Tinact, Tcrisis):
     crisis_happened = False
 
     while t < Tact:
-        lda1 =  (lda0 * (1-decay)) + ( (2 * lda0 / Tact) * (Tact - t) * decay) / 2
+        lda1 =  (lda0 * (1-decay)) + ( (2 * lda0 / Tact) * (Tact - t) * decay)
         prob_event = lda1 + mu
         prob_birth = lda1 / (lda1 + mu)
         prob_death = mu / (lda1 + mu)
