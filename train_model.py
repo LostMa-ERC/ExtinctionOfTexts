@@ -100,7 +100,7 @@ def compute_summary_stats(g):
         ]
 
 lambda_min_prior = 4.*10**(-3)
-lambda_max_prior = 12.*10**(-3)
+lambda_max_prior = 9.*10**(-3) 
 
 mu_min_prior = 1.*10**(-3)
 mu_max_prior = 5*10**(-3)
