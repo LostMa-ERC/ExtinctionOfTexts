@@ -314,7 +314,7 @@ x_obs_empirical = list(x_obs0.values()) + add_f1 + add_f2[:17]
 random.shuffle(x_obs_empirical)
 
 lambda_min_prior = 4.*10**(-3)
-lambda_max_prior = 12.*10**(-3)
+lambda_max_prior = 9.*10**(-3)
 
 mu_min_prior = 1.*10**(-3)
 mu_max_prior = 5*10**(-3)
