@@ -176,6 +176,6 @@ x = torch.tensor(x, dtype=torch.float32)
 inference = NLE(prior=prior)
 inference = inference.append_simulations(Tensor(theta), Tensor(x))
 likelihood_estimator = inference.train()
-with open("pretrained_models/inference_unif.pickle", "wb") as f:
+with open("pretrained_models/inference_unif_run3.pickle", "wb") as f:
     pickle.dump(inference, f)
 
