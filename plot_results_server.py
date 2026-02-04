@@ -339,7 +339,8 @@ posterior = inference.build_posterior()
 samples = posterior.sample(
     (N_samples_posterior,),
     x=x_obs_empirical,
-    mcmc_parameters={"warmup_steps": 1000, "num_chains": 100}
+    mcmc_method="nuts_pymc",
+    mcmc_parameters={"warmup_steps": 1000, "num_chains": 100, "num_workers":4}
 )
 
 # Generate the pair plot
