@@ -333,8 +333,8 @@ decay_max_prior = 1
 decimation_min_prior = 0
 decimation_max_prior = 1
 
-N_samples_prior = 100 #500_000 #500000
-N_samples_posterior = 100 #1000
+N_samples_prior = 500_000 #500000
+N_samples_posterior = 1000 #1000
 
 def simulator(theta):
     lda0, mu, decay, decim = theta
