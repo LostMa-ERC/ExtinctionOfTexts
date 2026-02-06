@@ -31,6 +31,7 @@ import multiprocessing
 
 evaluate_on_data = False
 num_workers = 4
+load_models = True
 
 def compute_summary_stats(g):
     """
@@ -112,7 +113,6 @@ def compute_summary_stats(g):
         
 #### Now importing the data
 if evaluate_on_data:
-
     def convert_date(x):
         pattern1 = re.compile('[0-9][0-9][0-9][0-9]')
         pattern2 = re.compile('[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9]')
@@ -179,16 +179,29 @@ if evaluate_on_data:
 
     wholeCorpus = {}
     corpus_dates = {}
+    corpus_workdates = {}
+
     for work in os.listdir(f'corpus_stemmata/'):
-        print(f'{work}')
+        #print(f'{work}')
         st = bd.load_from_OpenStemmata(f'corpus_stemmata/{work}/stemma.gv')
         with open(f"corpus_stemmata/{work}/metadata.txt", 'r') as f:
             content = f.read()
         metadata = yaml.safe_load(content)
         if "wits" in metadata:
             dates = [wit["witOrigDate"] for wit in metadata['wits'] if wit["witOrigDate"] != '']
+            missing_dates = [wit for wit in metadata['wits'] if wit["witOrigDate"] == '']
+            if missing_dates != []:
+                print(f"missing witnesses dates in {work}")
         else:
+            print(f"no witnesses in {work}")
             dates = []
+
+        if "workOrigDate" in metadata and metadata["workOrigDate"] != '':
+            workDate = convert_date(metadata["workOrigDate"])
+
+        else:
+            print(f"missing work date in {work}")
+            workDate = ''
 
         dates_num = []
         for x in dates:
@@ -199,73 +212,84 @@ if evaluate_on_data:
      
         wholeCorpus[f"{work}"] = st
         corpus_dates[f"{work}"] = dates_num
+        corpus_workdates[f"{work}"] = workDate
 
-    ranges_per_work = {}
-    for work, t_dates in corpus_dates.items():
-        if t_dates != []:
-            lb = sorted(t_dates, key=bottom)[0]
-            ub = sorted(t_dates, key=top)[-1]
-            ranges_per_work[work] = (lb,ub)
-
-
+    #ranges_per_work = {}
     lifespans = {}
-    for w,v in ranges_per_work.items():
-        match v:
-            case [(a,b), (c,d)]:
-                lifespans[w] = expected_abs_diff(a,b,c,d)
-            case [(a,b), c]:
-                lifespans[w] = expected_abs_diff_degenerate(a,b,c)
-            case [c,(a,b)]:
-                lifespans[w] = expected_abs_diff_degenerate(a,b,c)
-            case [a,b]:
-                lifespans[w] = abs(a-b)
-            case _:
-                print('error')
-
-    x_obs0 = {}
+    earliest_wit = {}
+    median_wit = {}
+    latest_wit = {}
     sizes = {}
-    for k in lifespans.keys():
-        ## computation of observables
-        g = wholeCorpus[k]
+    x_obs0 = {}
 
-        n_living = list(nx.get_node_attributes(g, 'state').values()).count(True)
-        sizes[k] = n_living
-        degrees = []
-        direct_filiation_nb = 0
-        arch_dists = []
+    for work, t_dates in corpus_dates.items():
+        #print(f"now dating {work}")
+        ## Now, convert all dates in time from original work
+        if t_dates and corpus_workdates[work]:
+            work_date = corpus_workdates[work]
+            relative_dates = []
+            for date in t_dates:
+                # print(f"work_date: {work_date}, date: {date}")
+                # Calculate the relative date difference
+                match (work_date, date):
+                    case ((a, b), (c, d)):
+                        if c <= a: # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
+                            c = a+1
+                        relative_dates.append(expected_abs_diff(a, b, c, d))
+                    case ((a, b), c):
+                        relative_dates.append(expected_abs_diff_degenerate(a, b, c))
+                    case (c, (a, b)):
+                        relative_dates.append(expected_abs_diff_degenerate(a, b, c))
+                    case (a, b):
+                        relative_dates.append(abs(a - b))
+                    case _:
+                        print(f'Error: Unexpected date format for work {work}, date {date}, work_date {work_date}')
 
-        if n_living >= 3:
-            st = bd.generate_stemma(g)
-            archetype = bd.root(st)
-            for n in st.nodes():
-                degrees.append(st.out_degree(n))
+            corpus_dates[work] = relative_dates
 
-                if n != archetype:
-                    father = list(st.predecessors(n))[0]
-                    if st.nodes[n]['state'] and st.nodes[father]['state']:
-                        direct_filiation_nb +=1
-                arch_dists.append(len(nx.shortest_path(st, source=archetype, target=n)))
-            
-            timelapse = lifespans[k]
-            deg_dist = Counter(degrees)
-            deg1 = deg_dist[1]
-            deg2 = deg_dist[2]
-            deg3 = deg_dist[3]
-            deg4 = deg_dist[4]
-            depth = max(arch_dists)
-            n_nodes = len(list(st.nodes()))
+            # now, get stemmatic properties
+            g = wholeCorpus[work]
+        
+            n_living = list(nx.get_node_attributes(g, 'state').values()).count(True)
+            sizes[work] = n_living
+            degrees = []
+            direct_filiation_nb = 0
+            arch_dists = []
+        
+            if n_living >= 3:
+                st = bd.generate_stemma(g)
+                archetype = bd.root(st)
+                for n in st.nodes():
+                    degrees.append(st.out_degree(n))
+        
+                    if n != archetype:
+                        father = list(st.predecessors(n))[0]
+                        if st.nodes[n]['state'] and st.nodes[father]['state']:
+                            direct_filiation_nb +=1
+                    arch_dists.append(len(nx.shortest_path(st, source=archetype, target=n)))
+                
+                deg_dist = Counter(degrees)
+                deg1 = deg_dist[1]
+                deg2 = deg_dist[2]
+                deg3 = deg_dist[3]
+                deg4 = deg_dist[4]
+                depth = max(arch_dists)
+                n_nodes = len(list(st.nodes()))
 
-            x_obs0[k] = [
-                n_living,
-                4*int(timelapse),
-                n_nodes,
-                direct_filiation_nb,
-                deg1,
-                deg2,
-                deg3,
-                deg4,
-                depth
-            ]
+            x_obs0[work] = [
+                    n_living,
+                    4*int(max(corpus_dates[work]) - min(corpus_dates[work])),
+                    4*int(min(corpus_dates[work])),
+                    4*int(np.median(corpus_dates[work])),
+                    4*int(max(corpus_dates[work])),
+                    n_nodes,
+                    direct_filiation_nb,
+                    deg1,
+                    deg2,
+                    deg3,
+                    deg4,
+                    depth
+                ]
 
     df = pd.read_csv("Old_French_witnesses.csv")
     f2_works = []
@@ -291,45 +315,79 @@ if evaluate_on_data:
 
     f2_dates_0 = [df[(df["text H-ID"] == x) & (df['status'] != 'fragment')]["Date"].values.tolist() for x in f2_works]
     f2_dates = [list(map(convert_date, x)) for  x in f2_dates_0]
+    f2_workdates = [df[(df["text H-ID"] == x) & (df['status'] != 'fragment')]["date_of_creation"].values.tolist()[0].replace(' to ', '-') for x in f2_works]
 
-    ranges_per_work = []
-    for t_dates in f2_dates:
+    add_f2 = []
+
+    for index, t_dates in enumerate(f2_dates):
         if t_dates != []:
-            lb = sorted(t_dates, key=bottom)[0]
-            ub = sorted(t_dates, key=top)[-1]
-            ranges_per_work.append((lb,ub))
+            workdate = f2_workdates[index]
+            relative_dates = []
+            for date in t_dates:
+                # print(f"work_date: {work_date}, date: {date}")
+                # Calculate the relative date difference
+                match (work_date, date):
+                    case ((a, b), (c, d)):
+                        if c <= a: # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
+                            c = a+1
+                        relative_dates.append(expected_abs_diff(a, b, c, d))
+                    case ((a, b), c):
+                        relative_dates.append(expected_abs_diff_degenerate(a, b, c))
+                    case (c, (a, b)):
+                        relative_dates.append(expected_abs_diff_degenerate(a, b, c))
+                    case (a, b):
+                        relative_dates.append(abs(a - b))
+                    case _:
+                        print(f'Error: Unexpected date format for work {work}, date {date}, work_date {work_date}')
 
+            f2_dates[index] = relative_dates
 
-    lifespans_f2 = []
-    for v in ranges_per_work:
-        match v:
-            case [(a,b), (c,d)]:
-                lifespans_f2.append(expected_abs_diff(a,b,c,d))
-            case [(a,b), c]:
-                lifespans_f2.append(expected_abs_diff_degenerate(a,b,c))
-            case [c,(a,b)]:
-                lifespans_f2.append(expected_abs_diff_degenerate(a,b,c))
-            case [a,b]:
-                lifespans_f2.append(abs(a-b))
-            case _:
-                print('error')
+            add_f2.append([
+                2, 
+                4*int(max(f2_dates[index]) - min(f2_dates[index])),
+                4*int(min(f2_dates[index])),
+                4*int(np.median(f2_dates[index])),
+                4*int(max(f2_dates[index])), -1,-1,-1,-1,-1,-1,-1])
 
-    add_f1 = [[
-            1,
-            0,
-            -1,
-            -1,
-            -1,
-            -1,
-            -1,
-            -1,
-            -1] for k in range(61)]
+    f1_dates_0 = [df[(df["text H-ID"] == x) & (df['status'] != 'fragment')]["Date"].values.tolist() for x in f1_works]
+    f1_dates = [list(map(convert_date, x)) for  x in f1_dates_0]
+    f1_workdates = [df[(df["text H-ID"] == x) & (df['status'] != 'fragment')]["date_of_creation"].values.tolist()[0].replace(' to ', '-') for x in f1_works]
 
-    add_f2 = [[2, int(4 * n), -1,-1,-1,-1,-1,-1,-1] for n in lifespans_f2]
-    x_obs_empirical = list(x_obs0.values()) + add_f1 + add_f2[:17]
+    add_f1 = []
 
-    random.shuffle(x_obs_empirical)
-        
+    for index, t_dates in enumerate(f1_dates):
+        if t_dates != []:
+            workdate = f1_workdates[index]
+            relative_dates = []
+            for date in t_dates:
+                # print(f"work_date: {work_date}, date: {date}")
+                # Calculate the relative date difference
+                match (work_date, date):
+                    case ((a, b), (c, d)):
+                        if c <= a: # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
+                            c = a+1
+                        relative_dates.append(expected_abs_diff(a, b, c, d))
+                    case ((a, b), c):
+                        relative_dates.append(expected_abs_diff_degenerate(a, b, c))
+                    case (c, (a, b)):
+                        relative_dates.append(expected_abs_diff_degenerate(a, b, c))
+                    case (a, b):
+                        relative_dates.append(abs(a - b))
+                    case _:
+                        print(f'Error: Unexpected date format for work {work}, date {date}, work_date {work_date}')
+
+            f1_dates[index] = relative_dates
+
+            add_f1.append([
+                1, 
+                4*int(max(f1_dates[index]) - min(f1_dates[index])),
+                4*int(min(f1_dates[index])),
+                4*int(np.median(f1_dates[index])),
+                4*int(max(f1_dates[index])), -1,-1,-1,-1,-1,-1,-1])
+
+    x_obs_empirical = list(x_obs0.values()) + add_f1[:62] + add_f2[:17]
+
+    random.shuffle(x_obs_empirical)        
 
 
 #### Now training
@@ -349,86 +407,96 @@ decimation_max_prior = 1
 N_samples_prior = 500_000 #500000
 N_samples_posterior = 1000 #1000
 
-def simulator(theta):
-    lda0, mu, decay, decim = theta
-    g = bd.generate_tree_unified(lda0, mu, decay, decim, 1000, 1000, 500)
+if not load_models:
 
-    return g
+    def simulator(theta):
+        lda0, mu, decay, decim = theta
+        g = bd.generate_tree_unified(lda0, mu, decay, decim, 1000, 1000, 500)
 
-prior = BoxUniform(low=Tensor([lambda_min_prior, mu_min_prior, decay_min_prior, decimation_min_prior]),
-                          high=Tensor([lambda_max_prior, mu_max_prior, decay_max_prior, decimation_max_prior]))
+        return g
 
-theta0 = prior.sample((N_samples_prior,))
+    prior = BoxUniform(low=Tensor([lambda_min_prior, mu_min_prior, decay_min_prior, decimation_min_prior]),
+                              high=Tensor([lambda_max_prior, mu_max_prior, decay_max_prior, decimation_max_prior]))
 
-theta  = []
-x = []
+    theta0 = prior.sample((N_samples_prior,))
 
-#for t in tqdm(theta0):
-#    vec = compute_summary_stats(simulator(t))
-#    if vec != None:
-#        theta.append(list(t))
-#        x.append(vec)
+    theta  = []
+    x = []
 
-def process_theta(t):
-    """
-    Helper function to process a single theta sample.
-    """
-    G = simulator(t)
-    vec = compute_summary_stats(G)
-    if vec is not None:
-        return (list(t), vec)
-    else:
-        return None
+    #for t in tqdm(theta0):
+    #    vec = compute_summary_stats(simulator(t))
+    #    if vec != None:
+    #        theta.append(list(t))
+    #        x.append(vec)
 
-def parallel_simulate(theta0, n_processes=None):
-    """
-    Parallelize the simulation and summary statistics computation.
+    def process_theta(t):
+        """
+        Helper function to process a single theta sample.
+        """
+        G = simulator(t)
+        vec = compute_summary_stats(G)
+        if vec is not None:
+            return (list(t), vec)
+        else:
+            return None
 
-    Args:
-        theta0: Tensor of shape (N_samples_prior, 4)
-        n_processes: Number of processes to use (default: all available cores)
+    def parallel_simulate(theta0, n_processes=None):
+        """
+        Parallelize the simulation and summary statistics computation.
 
-    Returns:
-        theta, x: Lists of valid theta and summary statistics
-    """
-    if n_processes is None:
-        n_processes = multiprocessing.cpu_count()
+        Args:
+            theta0: Tensor of shape (N_samples_prior, 4)
+            n_processes: Number of processes to use (default: all available cores)
 
-    with multiprocessing.Pool(n_processes) as pool:
-        results = list(tqdm(pool.imap(process_theta, theta0), total=len(theta0)))
+        Returns:
+            theta, x: Lists of valid theta and summary statistics
+        """
+        if n_processes is None:
+            n_processes = multiprocessing.cpu_count()
 
-    # Filter out None results
-    valid_results = [r for r in results if r is not None]
-    theta, x = zip(*valid_results) if valid_results else ([], [])
+        with multiprocessing.Pool(n_processes) as pool:
+            results = list(tqdm(pool.imap(process_theta, theta0), total=len(theta0)))
 
-    return list(theta), list(x)
+        # Filter out None results
+        valid_results = [r for r in results if r is not None]
+        theta, x = zip(*valid_results) if valid_results else ([], [])
 
-# Example usage:
-theta, x = parallel_simulate(theta0, n_processes=num_workers)
-theta = torch.tensor(theta, dtype=torch.float32)
-x = torch.tensor(x, dtype=torch.float32)
+        return list(theta), list(x)
 
-from sbi.analysis import plot_summary
+    # Example usage:
+    theta, x = parallel_simulate(theta0, n_processes=num_workers)
+    theta = torch.tensor(theta, dtype=torch.float32)
+    x = torch.tensor(x, dtype=torch.float32)
+
+    from sbi.analysis import plot_summary
 
 for i in [42, 123, 456, 808, 1946]:
-    torch.manual_seed(i)
-    inference = NLE(prior=prior)
-    inference = inference.append_simulations(Tensor(theta), Tensor(x))
-    print("training model " + str(i))
-    likelihood_estimator = inference.train(show_train_summary=True)
-    # Generate the plot
-    fig, ax = plot_summary(inference, tags=["training_loss", "validation_loss"])
+    if not load_models:
+        torch.manual_seed(i)
+        inference = NLE(prior=prior)
+        inference = inference.append_simulations(Tensor(theta), Tensor(x))
+        print("training model " + str(i))
+        likelihood_estimator = inference.train(show_train_summary=True)
+        # Generate the plot
+        fig, ax = plot_summary(inference, tags=["training_loss", "validation_loss"])
 
-    # Save the plot to disk
-    plt.savefig(
-        f"loss_summary_model_{i+1}.pdf",  # Save as PDF for high quality
-        dpi=300,  # High resolution
-        bbox_inches="tight",  # Remove extra whitespace
-        format="pdf"  # Use PDF for publication-quality figures
-    )
+        # Save the plot to disk
+        plt.savefig(
+            f"loss_summary_model_{i+1}.pdf",  # Save as PDF for high quality
+            dpi=300,  # High resolution
+            bbox_inches="tight",  # Remove extra whitespace
+            format="pdf"  # Use PDF for publication-quality figures
+        )
 
-    # Close the figure to free memory
-    plt.close(fig)
+        # Close the figure to free memory
+        plt.close(fig)
+
+        with open("pretrained_models/inference_unif_bench_" + str(i) + ".pickle", "wb") as f:
+            pickle.dump(inference, f)
+    
+    if load_models:
+        with open(y"pretrained_models/inference_unif_bench_" + str(i) + ".pickle", "rb") as f:
+            inference = pickle.load(f)
 
     if evaluate_on_data:
 
@@ -460,7 +528,4 @@ for i in [42, 123, 456, 808, 1946]:
             format="pdf"  # Use PDF for publication-quality figures
         )
 
-
-    with open("pretrained_models/inference_unif_bench_" + str(i) + ".pickle", "wb") as f:
-        pickle.dump(inference, f)
 
