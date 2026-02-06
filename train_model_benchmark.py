@@ -30,6 +30,7 @@ from torch import Tensor
 import multiprocessing
 
 evaluate_on_data = False
+num_workers = 4
 
 def compute_summary_stats(g):
     """
@@ -403,7 +404,7 @@ def parallel_simulate(theta0, n_processes=None):
     return list(theta), list(x)
 
 # Example usage:
-theta, x = parallel_simulate(theta0, n_processes=7)
+theta, x = parallel_simulate(theta0, n_processes=num_workers)
 theta = torch.tensor(theta, dtype=torch.float32)
 x = torch.tensor(x, dtype=torch.float32)
 
