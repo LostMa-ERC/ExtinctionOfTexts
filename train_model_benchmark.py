@@ -164,19 +164,20 @@ if evaluate_on_data:
         intervals
         '''
         print(f"expected_abs_diff called with a={a}, b={b}, c={c}, d={d}")
-        if a == b:
-            return expected_abs_diff_degenerate(a, c, d)
-        if c == d:
-            return expected_abs_diff_degenerate(c, a, b)
-        elif a < b < c < d:
-            return (c+d-b-a)/2
-        elif a <= c <= d < b:
-            return (1/(b-a)) * ((1/2)*((d-a)*(c-a)+(b-d)*(b-c)) + (1/3)*(d-c)**2)
-        elif a <= c <= b <= d:
-            return (1/(b-a)) * ((1/2)* ((c-a)*(d-a) + (b-c)*(d-b)) + (1/(3*(d-c)))*(b-c)**3 )
+        if not (a < b and c < d and a < c):
+            raise ValueError(f"Must have a < b, c < d, and a < c. Got a={a}, b={b}, c={c}, d={d}")
+
         else:
-            print(f"{a},{b} -- {c},{d} ")
-            raise ValueError("Must have a < b, c < d, and a < c")
+            if a == b:
+                return expected_abs_diff_degenerate(a, c, d)
+            if c == d:
+                return expected_abs_diff_degenerate(c, a, b)
+            elif a < b < c < d:
+                return (c+d-b-a)/2
+            elif a <= c <= d < b:
+                return (1/(b-a)) * ((1/2)*((d-a)*(c-a)+(b-d)*(b-c)) + (1/3)*(d-c)**2)
+            elif a <= c <= b <= d:
+                return (1/(b-a)) * ((1/2)* ((c-a)*(d-a) + (b-c)*(d-b)) + (1/(3*(d-c)))*(b-c)**3 )
 
     wholeCorpus = {}
     corpus_dates = {}
