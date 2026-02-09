@@ -163,6 +163,7 @@ if evaluate_on_data:
         Return the expectation value of the timelapse between two dates given as
         intervals
         '''
+        print(f"expected_abs_diff called with a={a}, b={b}, c={c}, d={d}")
         if a == b:
             return expected_abs_diff_degenerate(a, c, d)
         if c == d:
@@ -233,8 +234,10 @@ if evaluate_on_data:
                 # Calculate the relative date difference
                 match (work_date, date):
                     case ((a, b), (c, d)):
+                        print(f"{a,b,c,d}")
                         if c <= a: # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
                             c = a+1
+                        print(f"{a,b,c,d}")
                         relative_dates.append(expected_abs_diff(a, b, c, d))
                     case ((a, b), c):
                         relative_dates.append(expected_abs_diff_degenerate(a, b, c))
