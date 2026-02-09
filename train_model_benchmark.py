@@ -36,7 +36,7 @@ load_models = True
 #### Now importing the data
 if evaluate_on_data:
 
-    wholeCorpus = {}convert
+    wholeCorpus = {}
     corpus_dates = {}
     corpus_workdates = {}
 
