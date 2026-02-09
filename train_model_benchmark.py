@@ -29,7 +29,7 @@ from torch import Tensor
 
 import multiprocessing
 
-evaluate_on_data = False
+evaluate_on_data = True 
 num_workers = 4
 load_models = True
 
@@ -223,13 +223,13 @@ if evaluate_on_data:
     x_obs0 = {}
 
     for work, t_dates in corpus_dates.items():
-        #print(f"now dating {work}")
+        print(f"now dating {work}")
         ## Now, convert all dates in time from original work
         if t_dates and corpus_workdates[work]:
             work_date = corpus_workdates[work]
             relative_dates = []
             for date in t_dates:
-                # print(f"work_date: {work_date}, date: {date}")
+                print(f"work_date: {work_date}, date: {date}")
                 # Calculate the relative date difference
                 match (work_date, date):
                     case ((a, b), (c, d)):
@@ -495,7 +495,8 @@ for i in [42, 123, 456, 808, 1946]:
             pickle.dump(inference, f)
     
     if load_models:
-        with open(y"pretrained_models/inference_unif_bench_" + str(i) + ".pickle", "rb") as f:
+        print(f"now loading model {i}")
+        with open("pretrained_models/inference_unif_bench_" + str(i) + ".pickle", "rb") as f:
             inference = pickle.load(f)
 
     if evaluate_on_data:
