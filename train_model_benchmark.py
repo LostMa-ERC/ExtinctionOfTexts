@@ -36,7 +36,7 @@ load_models = True
 #### Now importing the data
 if evaluate_on_data:
 
-    wholeCorpus = {}
+    wholeCorpus = {}convert
     corpus_dates = {}
     corpus_workdates = {}
 
@@ -161,9 +161,9 @@ if evaluate_on_data:
     for work in works:
         n_wit = len(df[(df['text H-ID'] == work) & (df['status'] != 'fragment')])
         n_frags = len(df[(df['text H-ID'] == work) & (df['status'] == 'fragment')])
-        if n_wit !=0:
+        if n_wit != 0:
             size_d.append(n_wit)
-        if n_frags !=0:
+        if n_frags != 0:
             size_frags_d.append(n_frags)
 
         if n_wit == 2:
@@ -174,24 +174,25 @@ if evaluate_on_data:
     size_dist = Counter(size_d)
     size_dist_frags = Counter(size_frags_d)
 
-    f2_dates_0 = [df[(df["text H-ID"] == x) & (df['status'] != 'fragment')]["Date"].values.tolist() for x in f2_works]
-    f2_dates = [list(map(bd.convert_date, x)) for  x in f2_dates_0]
-    f2_workdates = [df[(df["text H-ID"] == x) & (df['status'] != 'fragment')]["date_of_creation"].values.tolist()[0].replace(' to ', '-') for x in f2_works]
+    f2_dates = df[df["text H-ID"].isin(f2_works)]
+    f2_dates = f2_dates[(f2_dates['status'] != 'fragment')][["text H-ID", "date_of_creation", "Date"]]
 
     add_f2 = []
 
-    for index, t_dates in enumerate(f2_dates):
+    for work in f2_works:
+        work_date = bd.convert_date(
+            f2_dates[f2_dates["text H-ID"] == work]["date_of_creation"].values.tolist()[0].replace(' to ', '-'))
+        print(work_date)
+        t_dates = [bd.convert_date(x) for x in f2_dates[f2_dates["text H-ID"] == work]["Date"].values.tolist()]
+        print(t_dates)
         if t_dates != []:
-            print(f"now dating {work}")
-            workdate = f2_workdates[index]
             relative_dates = []
             for date in t_dates:
-                print(f"work_date: {work_date}, date: {date}")
                 # Calculate the relative date difference
                 match (work_date, date):
                     case ((a, b), (c, d)):
-                        if c <= a: # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
-                            c = a+1
+                        if c <= a:  # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
+                            c = a + 1
                         relative_dates.append(bd.expected_abs_diff(a, b, c, d))
                     case ((a, b), c):
                         relative_dates.append(bd.expected_abs_diff_degenerate(a, b, c))
@@ -201,34 +202,32 @@ if evaluate_on_data:
                         relative_dates.append(abs(a - b))
                     case _:
                         print(f'Error: Unexpected date format for work {work}, date {date}, work_date {work_date}')
-
-            f2_dates[index] = relative_dates
 
             add_f2.append([
-                2, 
-                4*int(max(f2_dates[index]) - min(f2_dates[index])),
-                4*int(min(f2_dates[index])),
-                4*int(np.median(f2_dates[index])),
-                4*int(max(f2_dates[index])), -1,-1,-1,-1,-1,-1,-1])
+                2,
+                4 * int(max(relative_dates) - min(relative_dates)),
+                4 * int(min(relative_dates)),
+                4 * int(np.median(relative_dates)),
+                4 * int(max(relative_dates)), -1, -1, -1, -1, -1, -1, -1])
 
-    f1_dates_0 = [df[(df["text H-ID"] == x) & (df['status'] != 'fragment')]["Date"].values.tolist() for x in f1_works]
-    f1_dates = [list(map(bd.convert_date, x)) for  x in f1_dates_0]
-    f1_workdates = [df[(df["text H-ID"] == x) & (df['status'] != 'fragment')]["date_of_creation"].values.tolist()[0].replace(' to ', '-') for x in f1_works]
+    f1_dates = df[df["text H-ID"].isin(f1_works)]
+    f1_dates = f1_dates[(f1_dates['status'] != 'fragment')][["text H-ID", "date_of_creation", "Date"]]
 
     add_f1 = []
-
-    for index, t_dates in enumerate(f1_dates):
+    for work in f1_works:
+        work_date = bd.convert_date(
+            f1_dates[f1_dates["text H-ID"] == work]["date_of_creation"].values.tolist()[0].replace(' to ', '-'))
+        print(work_date)
+        t_dates = [bd.convert_date(x) for x in f1_dates[f1_dates["text H-ID"] == work]["Date"].values.tolist()]
+        print(t_dates)
         if t_dates != []:
-            print(f"now dating {work}")
-            workdate = f1_workdates[index]
             relative_dates = []
             for date in t_dates:
-                print(f"work_date: {work_date}, date: {date}")
                 # Calculate the relative date difference
                 match (work_date, date):
                     case ((a, b), (c, d)):
-                        if c <= a: # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
-                            c = a+1
+                        if c <= a:  # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
+                            c = a + 1
                         relative_dates.append(bd.expected_abs_diff(a, b, c, d))
                     case ((a, b), c):
                         relative_dates.append(bd.expected_abs_diff_degenerate(a, b, c))
@@ -239,14 +238,12 @@ if evaluate_on_data:
                     case _:
                         print(f'Error: Unexpected date format for work {work}, date {date}, work_date {work_date}')
 
-            f1_dates[index] = relative_dates
-
             add_f1.append([
-                1, 
-                4*int(max(f1_dates[index]) - min(f1_dates[index])),
-                4*int(min(f1_dates[index])),
-                4*int(np.median(f1_dates[index])),
-                4*int(max(f1_dates[index])), -1,-1,-1,-1,-1,-1,-1])
+                1,
+                4 * int(max(relative_dates) - min(relative_dates)),
+                4 * int(min(relative_dates)),
+                4 * int(np.median(relative_dates)),
+                4 * int(max(relative_dates)), -1, -1, -1, -1, -1, -1, -1])
 
     x_obs_empirical = list(x_obs0.values()) + add_f1[:62] + add_f2[:17]
 
