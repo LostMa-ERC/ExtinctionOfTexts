@@ -245,7 +245,14 @@ if evaluate_on_data:
                 4 * int(np.median(relative_dates)),
                 4 * int(max(relative_dates)), -1, -1, -1, -1, -1, -1, -1])
 
-    x_obs_empirical = list(x_obs0.values()) + add_f1[:62] + add_f2[:17]
+    n_works = len(set(df[df['status'] != 'fragment']["text H-ID"].values))
+    freqf2 = len(set(f2_works))
+    freqf1 = len(set(f1_works))
+    indf2 = round(len(x_obs0) * (freqf2 / n_works))
+    indf1 =round(len(x_obs0) * (freqf1 / n_works))
+    print(f"Using {len(x_obs0)} stemmata; using also {indf1} f1 and {indf2} f2 works") 
+    
+    x_obs_empirical = list(x_obs0.values()) + add_f1[:indf1] + add_f2[:indf2]
 
     random.shuffle(x_obs_empirical)        
 
