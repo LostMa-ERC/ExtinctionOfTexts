@@ -276,7 +276,7 @@ decimation_min_prior = 0
 decimation_max_prior = 1
 
 N_samples_prior = 500_000 #500000
-N_samples_posterior = 50_000 #1000
+N_samples_posterior = 5_000 #1000
 
 if not load_models:
 
@@ -373,8 +373,8 @@ for i in [42, 123, 456, 808, 1946]:
     if evaluate_on_data:
 
         posterior = inference.build_posterior(mcmc_method="slice_np_vectorized", mcmc_parameters={ 
-            "num_chains": 10, "warmup_steps": 1000, "thin": 10, "init_strategy": "resample",
-            "init_strategy_parameters": {'num_candidate_samples': 5000},
+            "num_chains": 10, "warmup_steps": 200, "thin": 10, "init_strategy": "resample",
+            "init_strategy_parameters": {'num_candidate_samples': 1000},
             "num_workers": num_workers#, "device": "cuda:0"
         })
 
