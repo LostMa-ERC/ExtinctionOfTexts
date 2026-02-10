@@ -30,9 +30,16 @@ from torch import Tensor
 import multiprocessing
 
 evaluate_on_data = True 
-num_workers = 1#11 
-load_models = True
+num_workers = 11 
+load_models = False 
 debug = False
+# Set random seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
+
+max_num_epochs=20
+
 
 #### Now importing the data
 if evaluate_on_data:
@@ -280,6 +287,7 @@ N_samples_posterior = 5_000 #1000
 
 if not load_models:
 
+
     def simulator(theta):
         lda0, mu, decay, decim = theta
         g = bd.generate_tree_unified(lda0, mu, decay, decim, 1000, 1000, 500)
@@ -347,7 +355,7 @@ for i in [42, 123, 456, 808, 1946]:
         inference = NLE(prior=prior)
         inference = inference.append_simulations(Tensor(theta), Tensor(x))
         print("training model " + str(i))
-        likelihood_estimator = inference.train(show_train_summary=True)
+        likelihood_estimator = inference.train(show_train_summary=True, max_num_epochs=max_num_epochs)
         # Generate the plot
         fig, ax = plot_summary(inference, tags=["training_loss", "validation_loss"])
 
@@ -374,8 +382,8 @@ for i in [42, 123, 456, 808, 1946]:
 
         posterior = inference.build_posterior(mcmc_method="slice_np_vectorized", mcmc_parameters={ 
             "num_chains": 10, "warmup_steps": 200, "thin": 10, "init_strategy": "resample",
-            "init_strategy_parameters": {'num_candidate_samples': 1000},
-            "num_workers": num_workers#, "device": "cuda:0"
+            "init_strategy_parameters": {'num_candidate_samples': 1000}#,
+            #"num_workers": num_workers#, "device": "cuda:0"
         })
 
         samples = posterior.sample(
