@@ -30,8 +30,9 @@ from torch import Tensor
 import multiprocessing
 
 evaluate_on_data = True 
-num_workers = 4
+num_workers = 1#11 
 load_models = True
+debug = False
 
 #### Now importing the data
 if evaluate_on_data:
@@ -82,20 +83,20 @@ if evaluate_on_data:
     x_obs0 = {}
 
     for work, t_dates in corpus_dates.items():
-        print(f"now dating {work}")
+        if debug:
+            print(f"now dating {work}")
         ## Now, convert all dates in time from original work
         if t_dates and corpus_workdates[work]:
             work_date = corpus_workdates[work]
             relative_dates = []
             for date in t_dates:
-                print(f"work_date: {work_date}, date: {date}")
+                if debug:
+                    print(f"work_date: {work_date}, date: {date}")
                 # Calculate the relative date difference
                 match (work_date, date):
                     case ((a, b), (c, d)):
-                        print(f"{a,b,c,d}")
                         if c <= a: # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
                             c = a+1
-                        print(f"{a,b,c,d}")
                         relative_dates.append(bd.expected_abs_diff(a, b, c, d))
                     case ((a, b), c):
                         relative_dates.append(bd.expected_abs_diff_degenerate(a, b, c))
@@ -182,9 +183,9 @@ if evaluate_on_data:
     for work in f2_works:
         work_date = bd.convert_date(
             f2_dates[f2_dates["text H-ID"] == work]["date_of_creation"].values.tolist()[0].replace(' to ', '-'))
-        print(work_date)
+        #print(work_date)
         t_dates = [bd.convert_date(x) for x in f2_dates[f2_dates["text H-ID"] == work]["Date"].values.tolist()]
-        print(t_dates)
+        #print(t_dates)
         if t_dates != []:
             relative_dates = []
             for date in t_dates:
@@ -217,9 +218,7 @@ if evaluate_on_data:
     for work in f1_works:
         work_date = bd.convert_date(
             f1_dates[f1_dates["text H-ID"] == work]["date_of_creation"].values.tolist()[0].replace(' to ', '-'))
-        print(work_date)
         t_dates = [bd.convert_date(x) for x in f1_dates[f1_dates["text H-ID"] == work]["Date"].values.tolist()]
-        print(t_dates)
         if t_dates != []:
             relative_dates = []
             for date in t_dates:
@@ -245,11 +244,16 @@ if evaluate_on_data:
                 4 * int(np.median(relative_dates)),
                 4 * int(max(relative_dates)), -1, -1, -1, -1, -1, -1, -1])
 
+    # Computing as to maintain the same proportion of f1 and f2 in the obs
+    # as in the witness table
+
     n_works = len(set(df[df['status'] != 'fragment']["text H-ID"].values))
     freqf2 = len(set(f2_works))
     freqf1 = len(set(f1_works))
-    indf2 = round(len(x_obs0) * (freqf2 / n_works))
-    indf1 =round(len(x_obs0) * (freqf1 / n_works))
+    ratiofsup2 = 1 - (freqf2 + freqf1) / n_works
+    x = len(x_obs0) / ratiofsup2 
+    indf2 = round(x * (freqf2 / n_works)) 
+    indf1 = round(x * (freqf1 / n_works))
     print(f"Using {len(x_obs0)} stemmata; using also {indf1} f1 and {indf2} f2 works") 
     
     x_obs_empirical = list(x_obs0.values()) + add_f1[:indf1] + add_f2[:indf2]
@@ -272,7 +276,7 @@ decimation_min_prior = 0
 decimation_max_prior = 1
 
 N_samples_prior = 500_000 #500000
-N_samples_posterior = 1000 #1000
+N_samples_posterior = 50_000 #1000
 
 if not load_models:
 
@@ -368,10 +372,14 @@ for i in [42, 123, 456, 808, 1946]:
 
     if evaluate_on_data:
 
-        posterior = inference.build_posterior()
+        posterior = inference.build_posterior(mcmc_method="slice_np_vectorized", mcmc_parameters={ 
+            "num_chains": 10, "warmup_steps": 1000, "thin": 10, "init_strategy": "resample",
+            "init_strategy_parameters": {'num_candidate_samples': 5000},
+            "num_workers": num_workers#, "device": "cuda:0"
+        })
 
         samples = posterior.sample(
-            (N_samples_posterior,),
+            sample_shape=(N_samples_posterior,),
             x=x_obs_empirical
         )
 
