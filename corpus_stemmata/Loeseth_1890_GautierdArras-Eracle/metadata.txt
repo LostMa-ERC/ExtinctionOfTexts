@@ -12,7 +12,7 @@ publicationPage : "n.p."
 publicationLink : "https://archive.org/details/oeuvrespublies01gautuoft/page/n9"
 workTitle : "Eracle"
 workViaf : ""
-workOrigDate : "1150-1154"
+workOrigDate : "1150-1186"
 workOrigPlace : ""
 workAuthors:
     - workAuthor: "Gautier d’Arras"

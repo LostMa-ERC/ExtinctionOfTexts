@@ -1,0 +1,415 @@
+import random
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+import networkx as nx
+import birth_death_utils as bd
+import os
+from collections import Counter
+from tqdm import tqdm
+import pickle
+from itertools import groupby
+import pandas as pd
+import yaml
+import re
+import multiprocessing as mp
+import seaborn as sns
+
+from sbi.analysis import pairplot
+from sbi.inference import NPE, simulate_for_sbi, NLE
+from sbi.utils import BoxUniform
+
+from sbi.utils.user_input_checks import (
+    check_sbi_inputs,
+    process_prior,
+    process_simulator,
+)
+
+from torch import Tensor
+
+import multiprocessing
+
+evaluate_on_data = True 
+num_workers = 11 
+load_models = False 
+debug = False
+# Set random seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
+
+max_num_epochs=20
+
+
+#### Now importing the data
+if evaluate_on_data:
+
+    wholeCorpus = {}
+    corpus_dates = {}
+    corpus_workdates = {}
+
+    for work in os.listdir(f'corpus_stemmata/'):
+        #print(f'{work}')
+        st = bd.load_from_OpenStemmata(f'corpus_stemmata/{work}/stemma.gv')
+        with open(f"corpus_stemmata/{work}/metadata.txt", 'r') as f:
+            content = f.read()
+        metadata = yaml.safe_load(content)
+        if "wits" in metadata:
+            dates = [wit["witOrigDate"] for wit in metadata['wits'] if wit["witOrigDate"] != '']
+            missing_dates = [wit for wit in metadata['wits'] if wit["witOrigDate"] == '']
+            if missing_dates != []:
+                print(f"missing witnesses dates in {work}")
+        else:
+            print(f"no witnesses in {work}")
+            dates = []
+
+        if "workOrigDate" in metadata and metadata["workOrigDate"] != '':
+            workDate = bd.convert_date(metadata["workOrigDate"])
+
+        else:
+            print(f"missing work date in {work}")
+            workDate = ''
+
+        dates_num = []
+        for x in dates:
+            if x != '':
+                date_num = bd.convert_date(x)
+                if date_num != None:
+                    dates_num.append(date_num)
+     
+        wholeCorpus[f"{work}"] = st
+        corpus_dates[f"{work}"] = dates_num
+        corpus_workdates[f"{work}"] = workDate
+
+    #ranges_per_work = {}
+    lifespans = {}
+    earliest_wit = {}
+    median_wit = {}
+    latest_wit = {}
+    sizes = {}
+    x_obs0 = {}
+
+    for work, t_dates in corpus_dates.items():
+        if debug:
+            print(f"now dating {work}")
+        ## Now, convert all dates in time from original work
+        if t_dates and corpus_workdates[work]:
+            work_date = corpus_workdates[work]
+            relative_dates = []
+            for date in t_dates:
+                if debug:
+                    print(f"work_date: {work_date}, date: {date}")
+                # Calculate the relative date difference
+                match (work_date, date):
+                    case ((a, b), (c, d)):
+                        if c <= a: # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
+                            c = a+1
+                        relative_dates.append(bd.expected_abs_diff(a, b, c, d))
+                    case ((a, b), c):
+                        relative_dates.append(bd.expected_abs_diff_degenerate(a, b, c))
+                    case (c, (a, b)):
+                        relative_dates.append(bd.expected_abs_diff_degenerate(a, b, c))
+                    case (a, b):
+                        relative_dates.append(abs(a - b))
+                    case _:
+                        print(f'Error: Unexpected date format for work {work}, date {date}, work_date {work_date}')
+
+            corpus_dates[work] = relative_dates
+
+            # now, get stemmatic properties
+            g = wholeCorpus[work]
+        
+            n_living = list(nx.get_node_attributes(g, 'state').values()).count(True)
+            sizes[work] = n_living
+            degrees = []
+            direct_filiation_nb = 0
+            arch_dists = []
+        
+            if n_living >= 3:
+                st = bd.generate_stemma(g)
+                archetype = bd.root(st)
+                for n in st.nodes():
+                    degrees.append(st.out_degree(n))
+        
+                    if n != archetype:
+                        father = list(st.predecessors(n))[0]
+                        if st.nodes[n]['state'] and st.nodes[father]['state']:
+                            direct_filiation_nb +=1
+                    arch_dists.append(len(nx.shortest_path(st, source=archetype, target=n)))
+                
+                deg_dist = Counter(degrees)
+                deg1 = deg_dist[1]
+                deg2 = deg_dist[2]
+                deg3 = deg_dist[3]
+                deg4 = deg_dist[4]
+                depth = max(arch_dists)
+                n_nodes = len(list(st.nodes()))
+
+            x_obs0[work] = [
+                    n_living,
+                    4*int(max(corpus_dates[work]) - min(corpus_dates[work])),
+                    4*int(min(corpus_dates[work])),
+                    4*int(np.median(corpus_dates[work])),
+                    4*int(max(corpus_dates[work])),
+                    n_nodes,
+                    direct_filiation_nb,
+                    deg1,
+                    deg2,
+                    deg3,
+                    deg4,
+                    depth
+                ]
+
+    df = pd.read_csv("Old_French_witnesses.csv")
+    f2_works = []
+    f1_works = []
+    works = set(list(df['text H-ID']))
+    size_frags_d = []
+    size_d = []
+    for work in works:
+        n_wit = len(df[(df['text H-ID'] == work) & (df['status'] != 'fragment')])
+        n_frags = len(df[(df['text H-ID'] == work) & (df['status'] == 'fragment')])
+        if n_wit != 0:
+            size_d.append(n_wit)
+        if n_frags != 0:
+            size_frags_d.append(n_frags)
+
+        if n_wit == 2:
+            f2_works.append(work)
+        if n_wit == 1:
+            f1_works.append(work)
+
+    size_dist = Counter(size_d)
+    size_dist_frags = Counter(size_frags_d)
+
+    f2_dates = df[df["text H-ID"].isin(f2_works)]
+    f2_dates = f2_dates[(f2_dates['status'] != 'fragment')][["text H-ID", "date_of_creation", "Date"]]
+
+    add_f2 = []
+
+    for work in f2_works:
+        work_date = bd.convert_date(
+            f2_dates[f2_dates["text H-ID"] == work]["date_of_creation"].values.tolist()[0].replace(' to ', '-'))
+        #print(work_date)
+        t_dates = [bd.convert_date(x) for x in f2_dates[f2_dates["text H-ID"] == work]["Date"].values.tolist()]
+        #print(t_dates)
+        if t_dates != []:
+            relative_dates = []
+            for date in t_dates:
+                # Calculate the relative date difference
+                match (work_date, date):
+                    case ((a, b), (c, d)):
+                        if c <= a:  # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
+                            c = a + 1
+                        relative_dates.append(bd.expected_abs_diff(a, b, c, d))
+                    case ((a, b), c):
+                        relative_dates.append(bd.expected_abs_diff_degenerate(a, b, c))
+                    case (c, (a, b)):
+                        relative_dates.append(bd.expected_abs_diff_degenerate(a, b, c))
+                    case (a, b):
+                        relative_dates.append(abs(a - b))
+                    case _:
+                        print(f'Error: Unexpected date format for work {work}, date {date}, work_date {work_date}')
+
+            add_f2.append([
+                2,
+                4 * int(max(relative_dates) - min(relative_dates)),
+                4 * int(min(relative_dates)),
+                4 * int(np.median(relative_dates)),
+                4 * int(max(relative_dates)), -1, -1, -1, -1, -1, -1, -1])
+
+    f1_dates = df[df["text H-ID"].isin(f1_works)]
+    f1_dates = f1_dates[(f1_dates['status'] != 'fragment')][["text H-ID", "date_of_creation", "Date"]]
+
+    add_f1 = []
+    for work in f1_works:
+        work_date = bd.convert_date(
+            f1_dates[f1_dates["text H-ID"] == work]["date_of_creation"].values.tolist()[0].replace(' to ', '-'))
+        t_dates = [bd.convert_date(x) for x in f1_dates[f1_dates["text H-ID"] == work]["Date"].values.tolist()]
+        if t_dates != []:
+            relative_dates = []
+            for date in t_dates:
+                # Calculate the relative date difference
+                match (work_date, date):
+                    case ((a, b), (c, d)):
+                        if c <= a:  # deal with the case of the range of a witness starts before the range of a work (should not happen, but, hey, approximate datings)
+                            c = a + 1
+                        relative_dates.append(bd.expected_abs_diff(a, b, c, d))
+                    case ((a, b), c):
+                        relative_dates.append(bd.expected_abs_diff_degenerate(a, b, c))
+                    case (c, (a, b)):
+                        relative_dates.append(bd.expected_abs_diff_degenerate(a, b, c))
+                    case (a, b):
+                        relative_dates.append(abs(a - b))
+                    case _:
+                        print(f'Error: Unexpected date format for work {work}, date {date}, work_date {work_date}')
+
+            add_f1.append([
+                1,
+                4 * int(max(relative_dates) - min(relative_dates)),
+                4 * int(min(relative_dates)),
+                4 * int(np.median(relative_dates)),
+                4 * int(max(relative_dates)), -1, -1, -1, -1, -1, -1, -1])
+
+    # Computing as to maintain the same proportion of f1 and f2 in the obs
+    # as in the witness table
+
+    n_works = len(set(df[df['status'] != 'fragment']["text H-ID"].values))
+    freqf2 = len(set(f2_works))
+    freqf1 = len(set(f1_works))
+    ratiofsup2 = 1 - (freqf2 + freqf1) / n_works
+    x = len(x_obs0) / ratiofsup2 
+    indf2 = round(x * (freqf2 / n_works)) 
+    indf1 = round(x * (freqf1 / n_works))
+    print(f"Using {len(x_obs0)} stemmata; using also {indf1} f1 and {indf2} f2 works") 
+    
+    x_obs_empirical = list(x_obs0.values()) + add_f1[:indf1] + add_f2[:indf2]
+
+    random.shuffle(x_obs_empirical)        
+
+
+#### Now training
+
+lambda_min_prior = 4.*10**(-3)
+lambda_max_prior = 9.*10**(-3) 
+
+mu_min_prior = 1.*10**(-3)
+mu_max_prior = 5*10**(-3)
+
+decay_min_prior = 0
+decay_max_prior = 1
+
+decimation_min_prior = 0
+decimation_max_prior = 1
+
+N_samples_prior = 500_000 #500000
+N_samples_posterior = 5_000 #1000
+
+if not load_models:
+
+
+    def simulator(theta):
+        lda0, mu, decay, decim = theta
+        g = bd.generate_tree_unified(lda0, mu, decay, decim, 1000, 1000, 500)
+
+        return g
+
+    prior = BoxUniform(low=Tensor([lambda_min_prior, mu_min_prior, decay_min_prior, decimation_min_prior]),
+                              high=Tensor([lambda_max_prior, mu_max_prior, decay_max_prior, decimation_max_prior]))
+
+    theta0 = prior.sample((N_samples_prior,))
+
+    theta  = []
+    x = []
+
+    #for t in tqdm(theta0):
+    #    vec = compute_summary_stats(simulator(t))
+    #    if vec != None:
+    #        theta.append(list(t))
+    #        x.append(vec)
+
+    def process_theta(t):
+        """
+        Helper function to process a single theta sample.
+        """
+        G = simulator(t)
+        vec = bd.compute_summary_stats(G)
+        if vec is not None:
+            return (list(t), vec)
+        else:
+            return None
+
+    def parallel_simulate(theta0, n_processes=None):
+        """
+        Parallelize the simulation and summary statistics computation.
+
+        Args:
+            theta0: Tensor of shape (N_samples_prior, 4)
+            n_processes: Number of processes to use (default: all available cores)
+
+        Returns:
+            theta, x: Lists of valid theta and summary statistics
+        """
+        if n_processes is None:
+            n_processes = multiprocessing.cpu_count()
+
+        with multiprocessing.Pool(n_processes) as pool:
+            results = list(tqdm(pool.imap(process_theta, theta0), total=len(theta0)))
+
+        # Filter out None results
+        valid_results = [r for r in results if r is not None]
+        theta, x = zip(*valid_results) if valid_results else ([], [])
+
+        return list(theta), list(x)
+
+    # Example usage:
+    theta, x = parallel_simulate(theta0, n_processes=num_workers)
+    theta = torch.tensor(theta, dtype=torch.float32)
+    x = torch.tensor(x, dtype=torch.float32)
+
+    from sbi.analysis import plot_summary
+
+for i in [42, 123, 456, 808, 1946]:
+    if not load_models:
+        torch.manual_seed(i)
+        inference = NLE(prior=prior)
+        inference = inference.append_simulations(Tensor(theta), Tensor(x))
+        print("training model " + str(i))
+        likelihood_estimator = inference.train(show_train_summary=True, max_num_epochs=max_num_epochs)
+        # Generate the plot
+        fig, ax = plot_summary(inference, tags=["training_loss", "validation_loss"])
+
+        # Save the plot to disk
+        plt.savefig(
+            f"loss_summary_model_{i+1}.pdf",  # Save as PDF for high quality
+            dpi=300,  # High resolution
+            bbox_inches="tight",  # Remove extra whitespace
+            format="pdf"  # Use PDF for publication-quality figures
+        )
+
+        # Close the figure to free memory
+        plt.close(fig)
+
+        with open("pretrained_models/inference_unif_bench_" + str(i) + ".pickle", "wb") as f:
+            pickle.dump(inference, f)
+    
+    if load_models:
+        print(f"now loading model {i}")
+        with open("pretrained_models/inference_unif_bench_" + str(i) + ".pickle", "rb") as f:
+            inference = pickle.load(f)
+
+    if evaluate_on_data:
+
+        posterior = inference.build_posterior(mcmc_method="slice_np_vectorized", mcmc_parameters={ 
+            "num_chains": 10, "warmup_steps": 200, "thin": 10, "init_strategy": "resample",
+            "init_strategy_parameters": {'num_candidate_samples': 1000}#,
+            #"num_workers": num_workers#, "device": "cuda:0"
+        })
+
+        samples = posterior.sample(
+            sample_shape=(N_samples_posterior,),
+            x=x_obs_empirical
+        )
+
+        # Generate the pair plot
+        fig, axes = pairplot(
+            samples,
+            limits=[
+                [lambda_min_prior, lambda_max_prior],
+                [mu_min_prior, mu_max_prior],
+                [decay_min_prior, decay_max_prior],
+                [decimation_min_prior, decimation_max_prior]
+            ],
+            figsize=(10, 10),  # Larger figsize for better readability
+            labels=[r"$\lambda$", r"$\mu$", r"$r_{\text{decay}}$", r"$r_{\text{decim}}$"]
+        )
+
+        # Adjust the DPI and save the figure
+        plt.savefig(
+            "pairplot_highres_bench"+ str(i)+".pdf",  # Save as PDF for vector graphics (best for papers)
+            dpi=300,  # High DPI for high resolution
+            bbox_inches="tight",  # Remove extra whitespace
+            format="pdf"  # Use PDF for publication-quality figures
+        )
+
+
